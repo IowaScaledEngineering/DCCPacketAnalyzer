@@ -205,7 +205,10 @@ void setup()
   TCCR0A &= ~((1<<WGM01)|(1<<WGM00));
   attachInterrupt( digitalPinToInterrupt(DCC_PIN), ExternalInterruptHandler, RISING);
   Serial.begin(115200);
-  Serial.print("I'm alive\n");
+  Serial.print(F("DCC Packet Analyzer v0.1\n"));
+  Serial.print(F("----------------------------\n"));
+  Serial.print(F("Iowa Scaled Engineering\n"));  
+  Serial.print(F("https://github.com/IowaScaledEngineering/DCCPacketAnalyzer\n"));
 }
 
 void rawPacketDecode(DCCPkt* pkt)

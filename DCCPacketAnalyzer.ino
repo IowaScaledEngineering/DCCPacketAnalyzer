@@ -2,7 +2,41 @@
 
 // This sketch is designed for an Arduino Uno with the DCC signal attached to digital pin 2
 
+// *****  START USER CONFIGURATION
+
+// DCC_PIN is the Arduino digital input corresponding to where the DCC signal is coming in.
+// It must be an external interrupt for whatever platform you're using.
+// Pin 2 is recommended for the Uno
+
 #define DCC_PIN  2
+
+
+// OPTION_RAW_PACKET_DISPLAY set to non-zero pumps packets through as hex strings
+// 0 = Human readable decode
+// 1 = Hex String in format P:XX XX XX\n
+
+#define OPTION_RAW_PACKET_DISPLAY 1
+
+
+// OPTION_SHOW_PREAMBLE_BITS set to 1 displays the number of preamble bits sent before the 
+// command came through.  It will be displayed as nnn/ (where n = preamble bits) on the beginning
+// of each decode line
+// 0 = No preamble bit count display
+// 1 = Preamble bit count displayed
+
+#define OPTION_SHOW_PREAMBLE_BITS 0
+
+
+// OPTION_SUPPRESS_IDLE_PKTS set to 1 suppresses the display of IDLE packets on the rails
+// These can be highly annoying to sort through, so most folks are going to want this on
+// To turn it off and display each idle packet, set this to 0
+
+#define OPTION_SUPPRESS_IDLE_PKTS 1
+
+
+// *****  END USER CONFIGURATION
+// Normally, you won't need to touch anything beyond here
+
 // The Timer0 prescaler is hard-coded in wiring.c 
 #define TIMER_PRESCALER 64
 
@@ -214,7 +248,7 @@ void setup()
 void rawPacketDecode(DCCPkt* pkt)
 {
   uint8_t i;
-  Serial.print("R:");
+  Serial.print("P:");
   for(i=0; i<pkt->Size; i++)
   {
     char buffer[4];
@@ -223,8 +257,6 @@ void rawPacketDecode(DCCPkt* pkt)
   }
   Serial.print("\n");
 }
-
-#define OPTION_SUPPRESS_IDLE_PKTS 1
 
 void decodeMultifunction(DCCPkt* pkt, uint8_t* data, uint8_t dataSz)
 {
@@ -449,6 +481,13 @@ void loop()
 
     if (crc != pkt.Data[pkt.Size-1])
     {
+      if (OPTION_SHOW_PREAMBLE_BITS != 0)
+      {
+        sprintf(buffer, "%03d/", pkt.PreambleBits);
+        Serial.print(buffer);
+      }
+
+
       sprintf(buffer, "E%02d: CRC ", pkt.PreambleBits);
       Serial.print(buffer);
       for(i=0; i<pkt.Size; i++)
@@ -464,40 +503,72 @@ void loop()
     {
       // Do nothing
       if(! OPTION_SUPPRESS_IDLE_PKTS)
-        Serial.print(F("IDLE"));
+      {
+        if (OPTION_SHOW_PREAMBLE_BITS != 0)
+        {
+          sprintf(buffer, "%03d/", pkt.PreambleBits);
+          Serial.print(buffer);
+        }
+
+        switch(OPTION_RAW_PACKET_DISPLAY)
+        {
+          case 0:
+            Serial.print(F("IDLE"));
+            break;
+          case 1:
+            rawPacketDecode(&pkt);
+            break;
+          default:
+            break;
+        }
+      }
+
+      
     }
     else
     {
-      sprintf(buffer, "%03d/", pkt.PreambleBits);
-      Serial.print(buffer);
+      switch(OPTION_RAW_PACKET_DISPLAY)
+      {
+        case 1:
+          rawPacketDecode(&pkt);
+          break;        
+        default:
 
-      if (0 == pkt.Data[0])
-      {
-        // Multi-function broadcast address
-        Serial.print(F("L:*ALL* "));
-      }
-      else if (0xFF == pkt.Data[0])
-      {
-          // Idles should have been handled above - this one's malformed
-        Serial.print(F("E:Malformed IDLE"));
-      }
-      else if (1 <= pkt.Data[0] && pkt.Data[0] <= 127)
-      {
-         // Multi-function (locomotive) decoder, 7 bit address
-        sprintf(buffer, "L:%03d ", pkt.Data[0]);
-        Serial.print(buffer);          
-        decodeMultifunction(&pkt, pkt.Data + 1, pkt.Size - 1);
-      }
-      else if (192 <= pkt.Data[0] && pkt.Data[0] <= 231)
-      {
-        uint16_t addr = (uint16_t)pkt.Data[0] & 0x003F;
-        addr *= 256;
-        addr += pkt.Data[1];
-        
-        sprintf(buffer, "L:%04d ", addr);
-        Serial.print(buffer);
-        decodeMultifunction(&pkt, pkt.Data + 2, pkt.Size - 2);
-        
+          if (OPTION_SHOW_PREAMBLE_BITS != 0)
+          {
+            sprintf(buffer, "%03d/", pkt.PreambleBits);
+            Serial.print(buffer);
+          }
+    
+          if (0 == pkt.Data[0])
+          {
+            // Multi-function broadcast address
+            Serial.print(F("L:*ALL* "));
+          }
+          else if (0xFF == pkt.Data[0])
+          {
+              // Idles should have been handled above - this one's malformed
+            Serial.print(F("E:Malformed IDLE"));
+          }
+          else if (1 <= pkt.Data[0] && pkt.Data[0] <= 127)
+          {
+             // Multi-function (locomotive) decoder, 7 bit address
+            sprintf(buffer, "L:%03d ", pkt.Data[0]);
+            Serial.print(buffer);          
+            decodeMultifunction(&pkt, pkt.Data + 1, pkt.Size - 1);
+          }
+          else if (192 <= pkt.Data[0] && pkt.Data[0] <= 231)
+          {
+            uint16_t addr = (uint16_t)pkt.Data[0] & 0x003F;
+            addr *= 256;
+            addr += pkt.Data[1];
+            
+            sprintf(buffer, "L:%04d ", addr);
+            Serial.print(buffer);
+            decodeMultifunction(&pkt, pkt.Data + 2, pkt.Size - 2);
+            
+          }
+          break;
       }
     }
   }
